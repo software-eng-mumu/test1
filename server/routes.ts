@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { spawn } from "child_process";
 import fs from "fs/promises";
 import { randomBytes } from "crypto";
+import { videoOptionsSchema } from "@shared/schema";
 
 const upload = multer({ dest: "uploads/" });
 
@@ -26,6 +27,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       metadata: {
         tags: metadata.tags || [],
         uploadDate: new Date().toISOString(),
+        description: metadata.description,
+        event: metadata.event,
+        location: metadata.location,
+        captionText: metadata.captionText,
       },
     });
 
@@ -52,22 +57,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/generate-video", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
 
-    const { photoIds } = req.body;
-    if (!Array.isArray(photoIds) || photoIds.length < 2) {
-      return res.status(400).send("Need at least 2 photos");
-    }
-
     try {
-      // 验证所有图片属于当前用户
-      const photos = await Promise.all(
-        photoIds.map(id => storage.getPhoto(id))
+      const options = videoOptionsSchema.parse(req.body);
+
+      // 获取并验证所有图片
+      let photos = await Promise.all(
+        options.photoIds.map(id => storage.getPhoto(id))
       );
 
+      // 验证所有权
       if (photos.some(photo => !photo || photo.userId !== req.user.id)) {
         return res.status(403).send("Unauthorized access to photos");
       }
 
-      // 创建临时文件列表
+      photos = photos.filter((photo): photo is NonNullable<typeof photo> => photo !== undefined);
+
+      // 根据选择的排序方式排序照片
+      switch (options.sortBy) {
+        case 'uploadDate':
+          photos.sort((a, b) => 
+            new Date(a.metadata.uploadDate).getTime() - new Date(b.metadata.uploadDate).getTime()
+          );
+          break;
+        case 'event':
+          photos.sort((a, b) => 
+            (a.metadata.event || '').localeCompare(b.metadata.event || '')
+          );
+          break;
+        // custom顺序使用传入的photoIds的顺序
+      }
+
+      // 创建临时目录
       const tempDir = path.join(process.cwd(), "temp");
       await fs.mkdir(tempDir, { recursive: true });
 
@@ -80,16 +100,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ).join("\n");
       await fs.writeFile(listPath, fileContent);
 
-      // 使用ffmpeg生成视频
-      const ffmpeg = spawn("ffmpeg", [
+      // 构建ffmpeg命令
+      const ffmpegArgs = [
         "-f", "concat",
         "-safe", "0",
         "-i", listPath,
-        "-vf", "fade=t=in:st=0:d=1,fade=t=out:st=4:d=1",
+      ];
+
+      // 添加转场效果
+      let filterComplex = "";
+      switch (options.transition) {
+        case 'fade':
+          filterComplex = `fade=t=in:st=0:d=1,fade=t=out:st=${options.duration-1}:d=1`;
+          break;
+        case 'slide':
+          filterComplex = `xfade=transition=slideleft:duration=1`;
+          break;
+        case 'zoom':
+          filterComplex = `zoompan=z='min(zoom+0.0015,1.5)':d=${options.duration}`;
+          break;
+      }
+
+      if (filterComplex) {
+        ffmpegArgs.push("-vf", filterComplex);
+      }
+
+      // 设置编码选项
+      ffmpegArgs.push(
         "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
         outputPath
-      ]);
+      );
+
+      // 使用ffmpeg生成视频
+      const ffmpeg = spawn("ffmpeg", ffmpegArgs);
 
       // 等待ffmpeg完成
       await new Promise((resolve, reject) => {

@@ -16,6 +16,9 @@ export const photos = pgTable("photos", {
     tags: string[];
     uploadDate: string;
     description?: string;
+    event?: string;
+    location?: string;
+    captionText?: string;
   }>().notNull(),
 });
 
@@ -33,3 +36,16 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Photo = typeof photos.$inferSelect;
 export type InsertPhoto = z.infer<typeof insertPhotoSchema>;
+
+// 视频生成选项的类型定义
+export const videoOptionsSchema = z.object({
+  photoIds: z.array(z.number()),
+  music: z.string().optional(),
+  transition: z.enum(['fade', 'slide', 'zoom']),
+  duration: z.number().min(1).max(10),
+  title: z.string().optional(),
+  sortBy: z.enum(['uploadDate', 'event', 'custom']),
+  captions: z.boolean(),
+});
+
+export type VideoOptions = z.infer<typeof videoOptionsSchema>;

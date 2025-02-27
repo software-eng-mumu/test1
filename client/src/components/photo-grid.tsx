@@ -9,15 +9,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { Eye } from "lucide-react";
+import { VideoGeneratorDialog } from "./video-generator-dialog";
 
 export function PhotoGrid({ photos }: { photos: Photo[] }) {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [selectedPhotos, setSelectedPhotos] = useState<number[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const { toast } = useToast();
+  const [showVideoDialog, setShowVideoDialog] = useState(false);
 
   const handlePhotoClick = (photo: Photo) => {
     setSelectedPhotos(prev => 
@@ -28,47 +26,8 @@ export function PhotoGrid({ photos }: { photos: Photo[] }) {
   };
 
   const handleViewPhoto = (photo: Photo, e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止事件冒泡到父元素
+    e.stopPropagation();
     setSelectedPhoto(photo);
-  };
-
-  const handleGenerateVideo = async () => {
-    if (selectedPhotos.length < 2) {
-      toast({
-        title: "选择错误",
-        description: "请至少选择两张图片来生成视频",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGenerating(true);
-    try {
-      const response = await apiRequest("POST", "/api/generate-video", { photoIds: selectedPhotos });
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'slideshow.mp4';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-
-      toast({
-        title: "成功",
-        description: "视频已生成并开始下载",
-      });
-    } catch (error) {
-      toast({
-        title: "错误",
-        description: "视频生成失败",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
-      setSelectedPhotos([]);
-    }
   };
 
   return (
@@ -76,12 +35,9 @@ export function PhotoGrid({ photos }: { photos: Photo[] }) {
       <div className="flex flex-col gap-4">
         {selectedPhotos.length > 0 && (
           <div className="flex justify-between items-center">
-            <span>已选择 {selectedPhotos.length} 张图片</span>
-            <Button
-              onClick={handleGenerateVideo}
-              disabled={isGenerating}
-            >
-              {isGenerating ? "生成中..." : "生成视频"}
+            <span>已选择 {selectedPhotos.length} 张照片</span>
+            <Button onClick={() => setShowVideoDialog(true)}>
+              制作视频
             </Button>
           </div>
         )}
@@ -127,17 +83,34 @@ export function PhotoGrid({ photos }: { photos: Photo[] }) {
                 alt={selectedPhoto.filename}
                 className="rounded-lg max-h-[70vh] object-contain"
               />
-              <div className="flex flex-wrap gap-2">
-                {selectedPhoto.metadata.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
-                    {tag}
-                  </Badge>
-                ))}
+              <div className="space-y-4">
+                {selectedPhoto.metadata.event && (
+                  <p>事件：{selectedPhoto.metadata.event}</p>
+                )}
+                {selectedPhoto.metadata.location && (
+                  <p>地点：{selectedPhoto.metadata.location}</p>
+                )}
+                {selectedPhoto.metadata.description && (
+                  <p>描述：{selectedPhoto.metadata.description}</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {selectedPhoto.metadata.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
               </div>
             </div>
           </DialogContent>
         )}
       </Dialog>
+
+      <VideoGeneratorDialog
+        open={showVideoDialog}
+        onOpenChange={setShowVideoDialog}
+        selectedPhotos={selectedPhotos}
+      />
     </>
   );
 }
