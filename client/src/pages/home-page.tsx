@@ -11,15 +11,22 @@ import { Loader2 } from "lucide-react";
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  
+
   const { data: photos, isLoading } = useQuery<Photo[]>({
     queryKey: ["/api/photos"],
   });
 
-  const filteredPhotos = photos?.filter(photo => 
-    selectedTags.length === 0 || 
-    selectedTags.every(tag => photo.metadata.tags.includes(tag))
-  );
+  // 改进的过滤逻辑
+  const filteredPhotos = photos?.filter(photo => {
+    if (selectedTags.length === 0) return true;
+
+    // 转换为小写进行比较
+    const photoTags = photo.metadata.tags.map(tag => tag.toLowerCase());
+    const searchTags = selectedTags.map(tag => tag.toLowerCase());
+
+    // 只要包含任意一个选中的标签就显示
+    return searchTags.some(tag => photoTags.includes(tag));
+  });
 
   if (isLoading) {
     return (
@@ -33,11 +40,11 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Photo Album</h1>
+          <h1 className="text-2xl font-bold">相册</h1>
           <div className="flex items-center gap-4">
-            <span>Welcome, {user?.username}</span>
+            <span>欢迎, {user?.username}</span>
             <Button variant="outline" onClick={() => logoutMutation.mutate()}>
-              Logout
+              退出登录
             </Button>
           </div>
         </div>
@@ -51,9 +58,10 @@ export default function HomePage() {
               selectedTags={selectedTags}
               onTagsChange={setSelectedTags}
               availableTags={Array.from(new Set(photos?.flatMap(p => p.metadata.tags) || []))}
+              placeholder="搜索标签..."
             />
           </div>
-          
+
           <PhotoGrid photos={filteredPhotos || []} />
         </div>
       </main>
