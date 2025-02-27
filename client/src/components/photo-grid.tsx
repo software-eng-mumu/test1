@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Eye } from "lucide-react";
 
 export function PhotoGrid({ photos }: { photos: Photo[] }) {
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
@@ -18,16 +19,17 @@ export function PhotoGrid({ photos }: { photos: Photo[] }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const { toast } = useToast();
 
-  const handlePhotoClick = (photo: Photo, isSelecting: boolean) => {
-    if (isSelecting) {
-      setSelectedPhotos(prev => 
-        prev.includes(photo.id) 
-          ? prev.filter(id => id !== photo.id)
-          : [...prev, photo.id]
-      );
-    } else {
-      setSelectedPhoto(photo);
-    }
+  const handlePhotoClick = (photo: Photo) => {
+    setSelectedPhotos(prev => 
+      prev.includes(photo.id) 
+        ? prev.filter(id => id !== photo.id)
+        : [...prev, photo.id]
+    );
+  };
+
+  const handleViewPhoto = (photo: Photo, e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止事件冒泡到父元素
+    setSelectedPhoto(photo);
   };
 
   const handleGenerateVideo = async () => {
@@ -89,21 +91,25 @@ export function PhotoGrid({ photos }: { photos: Photo[] }) {
             <div
               key={photo.id}
               className="group aspect-square relative rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={() => handlePhotoClick(photo, selectedPhotos.length > 0)}
+              onClick={() => handlePhotoClick(photo)}
             >
               <img
                 src={`/api/photos/${photo.id}`}
                 alt={photo.filename}
                 className="object-cover w-full h-full"
               />
-              {selectedPhotos.length > 0 && (
-                <div className="absolute top-2 left-2">
-                  <Checkbox
-                    checked={selectedPhotos.includes(photo.id)}
-                    className="data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                  />
-                </div>
-              )}
+              <div className="absolute top-2 left-2">
+                <Checkbox
+                  checked={selectedPhotos.includes(photo.id)}
+                  className="data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                />
+              </div>
+              <button
+                className="absolute top-2 right-2 p-1 rounded-full bg-black/50 hover:bg-black/70 text-white"
+                onClick={(e) => handleViewPhoto(photo, e)}
+              >
+                <Eye className="h-4 w-4" />
+              </button>
             </div>
           ))}
         </div>
