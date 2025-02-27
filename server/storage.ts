@@ -1,8 +1,10 @@
-import { User, InsertUser, Photo, InsertPhoto } from "@shared/schema";
+import { photos, users, type User, type InsertUser, type Photo, type InsertPhoto } from "@shared/schema";
+import { db, pool } from "./db";
+import { eq } from "drizzle-orm";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import createPgSessionStore from "connect-pg-simple";
 
-const MemoryStore = createMemoryStore(session);
+const PostgresStore = createPgSessionStore(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -14,56 +16,50 @@ export interface IStorage {
   sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private photos: Map<number, Photo>;
-  private currentUserId: number;
-  private currentPhotoId: number;
+export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.photos = new Map();
-    this.currentUserId = 1;
-    this.currentPhotoId = 1;
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000,
+    // 创建会话存储，使用pool直接连接数据库
+    this.sessionStore = new PostgresStore({
+      pool: pool,
+      createTableIfMissing: true,
     });
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
-    const user = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   async createPhoto(insertPhoto: InsertPhoto & { userId: number }): Promise<Photo> {
-    const id = this.currentPhotoId++;
-    const photo = { ...insertPhoto, id };
-    this.photos.set(id, photo);
+    const [photo] = await db.insert(photos).values({
+      userId: insertPhoto.userId,
+      filename: insertPhoto.filename,
+      metadata: insertPhoto.metadata
+    }).returning();
     return photo;
   }
 
   async getPhoto(id: number): Promise<Photo | undefined> {
-    return this.photos.get(id);
+    const [photo] = await db.select().from(photos).where(eq(photos.id, id));
+    return photo;
   }
 
   async getPhotosByUserId(userId: number): Promise<Photo[]> {
-    return Array.from(this.photos.values()).filter(
-      (photo) => photo.userId === userId,
-    );
+    return await db.select().from(photos).where(eq(photos.userId, userId));
   }
 }
 
-export const storage = new MemStorage();
+// 导出数据库存储实例
+export const storage = new DatabaseStorage();
