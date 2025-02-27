@@ -20,14 +20,28 @@ export function TagInput({
   const [input, setInput] = useState("");
 
   const handleAddTag = (tag: string) => {
-    if (tag && !selectedTags.includes(tag)) {
-      onTagsChange([...selectedTags, tag]);
+    const trimmedTag = tag.trim();
+    if (trimmedTag && !selectedTags.includes(trimmedTag)) {
+      const newTags = [...selectedTags, trimmedTag];
+      onTagsChange(newTags);
+      setInput("");
     }
-    setInput("");
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    onTagsChange(selectedTags.filter((tag) => tag !== tagToRemove));
+    const newTags = selectedTags.filter((tag) => tag !== tagToRemove);
+    onTagsChange(newTags);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && input.trim()) {
+      e.preventDefault();
+      handleAddTag(input);
+    } else if (e.key === "Backspace" && !input && selectedTags.length > 0) {
+      // 当输入框为空且按下退格键时，删除最后一个标签
+      const newTags = selectedTags.slice(0, -1);
+      onTagsChange(newTags);
+    }
   };
 
   return (
@@ -37,15 +51,14 @@ export function TagInput({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={placeholder}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleAddTag(input);
-            }
-          }}
+          onKeyDown={handleKeyDown}
         />
-        <Button onClick={() => handleAddTag(input)} variant="secondary">
-          Add
+        <Button 
+          onClick={() => handleAddTag(input)}
+          variant="secondary"
+          disabled={!input.trim()}
+        >
+          添加
         </Button>
       </div>
 
@@ -58,7 +71,7 @@ export function TagInput({
           >
             {tag}
             <X
-              className="h-3 w-3 cursor-pointer"
+              className="h-3 w-3 cursor-pointer hover:text-destructive"
               onClick={() => handleRemoveTag(tag)}
             />
           </Badge>
@@ -73,7 +86,7 @@ export function TagInput({
               <Badge
                 key={tag}
                 variant="outline"
-                className="cursor-pointer"
+                className="cursor-pointer hover:bg-secondary"
                 onClick={() => handleAddTag(tag)}
               >
                 {tag}
